@@ -428,6 +428,8 @@ $('share').addEventListener('click', async () => {
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 })();
 if (!BOOTH) {
+  // the "first 10 visitors" meeting bonus was for the expo booth only (decided 18/11)
+  $('meeting').checked = false; $('meeting').closest('label').style.display = 'none';
   $('inner').remove(); $('thanksBooth').remove(); $('dot').style.display = 'none'; $('paper').checked = false;
   $('again').textContent = 'סגירה';
   // no sheet yet = nowhere for a remote visitor's lead to go: keep the form closed rather than lose it
