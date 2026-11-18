@@ -105,6 +105,8 @@ footer{text-align:center;padding:4px 0 26px;color:rgba(255,255,255,.55);font-siz
 #dot.warn{background:#F5B942}
 #storageWarn{position:fixed;top:0;inset-inline:0;z-index:8;background:#D9483B;color:#fff;font-weight:800;font-size:20px;text-align:center;padding:14px 16px}
 #storageWarn[hidden]{display:none}
+#closed{max-width:768px;margin:0 auto 12px;background:rgba(245,185,66,.16);border:1.5px solid #F5B942;color:#fff;border-radius:14px;padding:14px;text-align:center;font-weight:800;font-size:20px}
+#closed[hidden]{display:none}
 footer .logo{display:inline-block;font-weight:800;color:rgba(255,255,255,.8);font-size:16px;padding:6px 14px;cursor:default}
 .overlay{position:fixed;inset:0;background:rgba(4,14,10,.78);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:16px;z-index:5}
 .overlay.show{display:flex}
@@ -168,6 +170,7 @@ footer .logo{display:inline-block;font-weight:800;color:rgba(255,255,255,.8);fon
     <div class="err" id="err" role="alert"></div>
   </form>
 </div>
+<div id="closed" hidden>ההרשמה תיפתח בקרוב</div>
 <div id="storageWarn" hidden>⚠ הדפדפן הזה לא שומר נתונים — הרישומים יאבדו! לפתוח בחלון רגיל (לא גלישה בסתר) או למלא כרטיסי נייר</div>
 <footer><span class="logo" id="logo">אקסל מקס<i id="dot" class="warn"></i></span><div>הפרטים משמשים רק את אקסל מקס ולא מועברים לאף גורם</div></footer>
 
@@ -175,8 +178,14 @@ footer .logo{display:inline-block;font-weight:800;color:rgba(255,255,255,.8);fon
   <div class="ok">✓</div>
   <h3 id="thanksTitle">תודה!</h3>
   <p id="thanksGift"></p>
-  <p>נשמח לראות אתכם בדוכן</p>
+  <p id="thanksBooth">נשמח לראות אתכם בדוכן</p>
   <button class="btn pri" id="again" type="button" style="margin-top:16px">רישום חדש</button>
+</div></div>
+
+<div class="overlay" id="retry"><div class="box">
+  <h3>כמעט...</h3>
+  <p>לא הצלחנו לשלוח את ההרשמה. בדקו שיש חיבור לאינטרנט ולחצו שוב.</p>
+  <button class="btn pri" id="retryBtn" type="button" style="margin-top:16px">שליחה שוב</button>
 </div></div>
 
 <div class="overlay" id="panel"><div class="box panel">
@@ -200,6 +209,9 @@ const KEY = 'expo-belz-2026-register';
 const PREF = 'expo-belz-2026-register-prefs';
 const FIELDS = [['time', 'זמן'], ['name', 'שם'], ['phone', 'טלפון'], ['org', 'עסק / מוסד'], ['email', 'מייל'], ['interest', 'במה תרצה עזרה'], ['gift', 'מתנה'], ['callback', 'לחזור'], ['mailing', 'דיוור'], ['meeting', 'פגישת נקודת איזון'], ['notes', 'הערות'], ['rating', 'דירוג פנימי'], ['source', 'מקור'], ['staff', 'איש הדוכן'], ['id', 'מזהה']];
 const $ = id => document.getElementById(id);
+// Booth = the laptop file or the link with ?booth: staff panel, internal rating, kiosk behaviour.
+// Public = the plain link sent to friends: none of that, and "thank you" only once the sheet has the lead.
+const BOOTH = location.protocol === 'file:' || new URLSearchParams(location.search).has('booth');
 // Leads are the one thing that must never be lost: two copies in this browser, and save() reads back
 // what it wrote before reporting success. load() falls back to the second copy if the first is damaged.
 const BKEY = KEY + '-backup';
@@ -269,7 +281,7 @@ $('emailFix').addEventListener('click', () => { $('email').value = $('emailFix')
 function clearForm() {
   $('f').reset();
   document.querySelectorAll('.gift.on,.seg button.on,input.bad').forEach(x => x.classList.remove('on', 'bad'));
-  pick.gift = pick.interest = pick.rating = ''; $('inner').open = false; warnedNoEmail = false; $('err').textContent = ''; $('emailFix').hidden = true;
+  pick.gift = pick.interest = pick.rating = ''; if ($('inner')) $('inner').open = false; warnedNoEmail = false; $('err').textContent = ''; $('emailFix').hidden = true;
   window.scrollTo(0, 0);
 }
 
@@ -296,27 +308,40 @@ $('f').addEventListener('submit', e => {
     time: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`,
     name: v('name'), phone, org: '', email, interest: pick.interest, gift: pick.gift,
     meeting: $('meeting').checked ? 'כן' : '', notes: v('notes'), rating: pick.rating, callback: $('callback').checked ? 'כן' : '', mailing: $('mailing').checked ? 'כן' : '',
-    source: $('paper').checked ? 'כרטיס נייר' : 'טופס דיגיטלי', staff: prefs.staff || '', sent: false,
+    source: !BOOTH ? 'קישור ציבורי' : $('paper').checked ? 'כרטיס נייר' : 'טופס דיגיטלי', staff: prefs.staff || '', sent: false,
   };
   const a = load(); a.push(lead);
   if (!save(a)) { $('err').textContent = 'השמירה נכשלה — נא למלא כרטיס נייר'; return; }
   clearForm();
+  if (!BOOTH) { pendingLead = lead; deliver(); return; }
   if ($('paper').checked) { toast('נשמר ✓'); $('phone').focus(); }
-  else {
-    $('thanksTitle').textContent = lead.name ? `תודה, ${lead.name.split(' ')[0]}!` : 'תודה!';
-    $('thanksGift').textContent = lead.gift && lead.email ? 'המתנה תישלח אליכם למייל' : 'נרשמתם בהצלחה';
-    $('thanks').classList.add('show');
-    clearTimeout(thanksTimer); thanksTimer = setTimeout(() => $('thanks').classList.remove('show'), 8000);
-  }
+  else showThanks(lead);
   sync();
 });
+function showThanks(lead) {
+  $('thanksTitle').textContent = lead.name ? `תודה, ${lead.name.split(' ')[0]}!` : 'תודה!';
+  $('thanksGift').textContent = lead.gift && lead.email ? 'המתנה תישלח אליכם למייל' : 'נרשמתם בהצלחה';
+  $('thanks').classList.add('show');
+  clearTimeout(thanksTimer); if (BOOTH) thanksTimer = setTimeout(() => $('thanks').classList.remove('show'), 8000);
+}
+// Public link: the lead sits on the visitor's own phone only, so "thank you" waits until the sheet confirms it
+let pendingLead = null;
+async function deliver() {
+  if (!pendingLead) return;
+  $('retry').classList.remove('show'); toast('שולח...');
+  await sync();
+  $('toast').classList.remove('show');
+  if (load().some(l => l.id === pendingLead.id && l.sent)) { showThanks(pendingLead); pendingLead = null; }
+  else $('retry').classList.add('show');
+}
+$('retryBtn').addEventListener('click', deliver);
 let thanksTimer;
 $('again').addEventListener('click', () => { $('thanks').classList.remove('show'); clearTimeout(thanksTimer); });
 
 // A half-filled form left on a public tablet: clear it after 90 seconds without a touch
 let idle;
 const touch = () => { clearTimeout(idle); idle = setTimeout(() => { if ($('panel').classList.contains('show')) return; if ([...document.querySelectorAll('#f input[type=text],#f input[type=tel],#f input[type=email]')].some(i => i.value)) clearForm(); }, 90000); };
-['input', 'click', 'touchstart', 'keydown'].forEach(ev => document.addEventListener(ev, touch, { passive: true }));
+if (BOOTH) ['input', 'click', 'touchstart', 'keydown'].forEach(ev => document.addEventListener(ev, touch, { passive: true }));
 
 // --- sync to Google Sheet ---
 let syncing = false, lastSync = null, lastErr = '';
@@ -343,10 +368,12 @@ addEventListener('online', sync);
 let hold;
 const startHold = e => { e.preventDefault(); hold = setTimeout(openPanel, 2000); };
 const stopHold = () => clearTimeout(hold);
+if (BOOTH) {
 $('logo').addEventListener('touchstart', startHold, { passive: false });
 $('logo').addEventListener('mousedown', startHold);
 ['touchend', 'touchcancel', 'mouseup', 'mouseleave'].forEach(ev => $('logo').addEventListener(ev, stopHold));
 $('logo').addEventListener('contextmenu', e => e.preventDefault());
+}
 function openPanel() { $('staff').value = prefs.staff || ''; $('paper').checked = !!prefs.paper; drawPanel(); $('panel').classList.add('show'); }
 function drawPanel() {
   const a = load(), pend = a.filter(l => !l.sent).length;
@@ -400,7 +427,12 @@ $('share').addEventListener('click', async () => {
   if (!ok) $('storageWarn').hidden = false;
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 })();
-if (prefs.paper) $('paper').checked = true;
+if (!BOOTH) {
+  $('inner').remove(); $('thanksBooth').remove(); $('dot').style.display = 'none'; $('paper').checked = false;
+  $('again').textContent = 'סגירה';
+  // no sheet yet = nowhere for a remote visitor's lead to go: keep the form closed rather than lose it
+  if (!SHEETS_URL) { $('f').before($('closed')); $('closed').hidden = false; $('f').querySelector('button[type=submit]').disabled = true; $('f').style.opacity = '.45'; $('f').style.pointerEvents = 'none'; }
+} else if (prefs.paper) $('paper').checked = true;
 sync();
 </script>
 </body>
