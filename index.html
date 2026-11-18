@@ -204,6 +204,9 @@ footer .logo{display:inline-block;font-weight:800;color:rgba(255,255,255,.8);fon
 // Google Sheet connection — paste the Apps Script web-app URL here (ends with /exec). Empty = local only.
 const SHEETS_URL = '';
 const SHEETS_TOKEN = 'belz2026-excelmax';   // must match TOKEN in tools/sheets-apps-script.gs
+// Public link closes at this moment (booth is never closed). The sheet script enforces the same time.
+const PUBLIC_CLOSE_AT = '2026-11-19T23:59:00+02:00';
+const CLOSED_MSG = 'ההרשמה הסתיימה — תודה על ההתעניינות! לפרטים: 0548-40-30-40';
 
 const KEY = 'expo-belz-2026-register';
 const PREF = 'expo-belz-2026-register-prefs';
@@ -331,6 +334,8 @@ async function deliver() {
   $('retry').classList.remove('show'); toast('שולח...');
   await sync();
   $('toast').classList.remove('show');
+  // the sheet said the public link is closed (page was opened before the closing time)
+  if (lastErr === 'closed') { closeForm(CLOSED_MSG); return; }
   if (load().some(l => l.id === pendingLead.id && l.sent)) { showThanks(pendingLead); pendingLead = null; }
   else $('retry').classList.add('show');
 }
@@ -432,9 +437,15 @@ if (!BOOTH) {
   $('meeting').checked = false; $('meeting').closest('label').style.display = 'none';
   $('inner').remove(); $('thanksBooth').remove(); $('dot').style.display = 'none'; $('paper').checked = false;
   $('again').textContent = 'סגירה';
-  // no sheet yet = nowhere for a remote visitor's lead to go: keep the form closed rather than lose it
-  if (!SHEETS_URL) { $('f').before($('closed')); $('closed').hidden = false; $('f').querySelector('button[type=submit]').disabled = true; $('f').style.opacity = '.45'; $('f').style.pointerEvents = 'none'; }
+  // past the closing time, or no sheet yet (= nowhere for a remote visitor's lead to go): keep the form closed
+  if (PUBLIC_CLOSE_AT && Date.now() > Date.parse(PUBLIC_CLOSE_AT)) closeForm(CLOSED_MSG);
+  else if (!SHEETS_URL) closeForm('ההרשמה תיפתח בקרוב');
 } else if (prefs.paper) $('paper').checked = true;
+function closeForm(msg) {
+  $('retry').classList.remove('show');
+  $('closed').textContent = msg; $('f').before($('closed')); $('closed').hidden = false;
+  $('f').querySelector('button[type=submit]').disabled = true; $('f').style.opacity = '.45'; $('f').style.pointerEvents = 'none';
+}
 sync();
 </script>
 </body>
