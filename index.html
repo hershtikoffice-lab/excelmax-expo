@@ -205,7 +205,7 @@ footer .logo{display:inline-block;font-weight:800;color:rgba(255,255,255,.8);fon
 const SHEETS_URL = '';
 const SHEETS_TOKEN = 'belz2026-excelmax';   // must match TOKEN in tools/sheets-apps-script.gs
 // Public link closes at this moment (booth is never closed). The sheet script enforces the same time.
-const PUBLIC_CLOSE_AT = '2026-11-19T23:59:00+02:00';
+const PUBLIC_CLOSE_AT = '';   // set at connection time: node tools/build-register.mjs --url <exec> --close <now+24h>
 const CLOSED_MSG = 'ההרשמה הסתיימה — תודה על ההתעניינות! לפרטים: 0548-40-30-40';
 
 const KEY = 'expo-belz-2026-register';
